@@ -6,3 +6,5 @@ Repositorio para la clase de Optimización de Aplicaciones Web.
 -Isaías Peniche Cruz.
 
 -Iván Augusto Pérez Saldívar.
+
+-Luis Angel Montero Salazar.

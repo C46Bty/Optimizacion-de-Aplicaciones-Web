@@ -156,26 +156,39 @@ function fetchRSS($url) {
     return ['name' => $feedName, 'items' => $items];
 }
 
+// --- Obtener feeds ---
 $db = getDB();
 $feeds = $db->query("SELECT * FROM feeds")->fetchAll(PDO::FETCH_ASSOC);
 
 if (empty($feeds)) {
-    echo json_encode(['success' => false, 'message' => 'No hay feeds configurados.']);
+    echo json_encode(['success' => false, 'message' => 'No hay feeds configurados.', 'new_count' => 0]);
     exit;
 }
 
 $totalNew = 0;
+$skipped = 0;
 $errors = [];
+$cacheMinutes = 30; // Omitir feed si fue actualizado hace menos de 30 min
 
 $stmt = $db->prepare("
     INSERT OR IGNORE INTO news (feed_id, feed_name, title, url, description, pub_date, categories, guid)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ");
+$updateFetch = $db->prepare("UPDATE feeds SET last_fetched=CURRENT_TIMESTAMP WHERE id=?");
 
 foreach ($feeds as $feed) {
+    // Cache por feed: omitir si fue actualizado recientemente
+    if ($feed['last_fetched']) {
+        $age = time() - strtotime($feed['last_fetched']);
+        if ($age < $cacheMinutes * 60) {
+            $skipped++;
+            continue;
+        }
+    }
+
     $result = fetchRSS($feed['url']);
     if ($result === null) {
-        $errors[] = "Error al obtener: " . htmlspecialchars($feed['url']);
+        $errors[] = htmlspecialchars($feed['name'] ?: $feed['url']);
         continue;
     }
 
@@ -203,9 +216,12 @@ foreach ($feeds as $feed) {
             // Duplicate guid — skip
         }
     }
+
+    $updateFetch->execute([$feed['id']]);
 }
 
 $msg = "Actualización completada. $totalNew nuevas noticias agregadas.";
-if ($errors) $msg .= " Errores: " . implode('; ', $errors);
+if ($skipped > 0) $msg .= " ($skipped feed(s) omitidos por caché de {$cacheMinutes} min).";
+if ($errors) $msg .= " Error en: " . implode(', ', $errors) . ".";
 
 echo json_encode(['success' => true, 'message' => $msg, 'new_count' => $totalNew]);

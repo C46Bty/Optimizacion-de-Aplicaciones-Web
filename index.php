@@ -7,6 +7,8 @@ $search = trim($_GET['search'] ?? '');
 $sort = $_GET['sort'] ?? 'pub_date';
 $order = strtoupper($_GET['order'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
 $feedFilter = (int)($_GET['feed'] ?? 0);
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 18;
 
 // Allowed sort columns
 $allowedSort = ['pub_date', 'title', 'feed_name', 'categories'];
@@ -28,8 +30,17 @@ if ($feedFilter) {
 }
 
 $whereSQL = $where ? "WHERE " . implode(" AND ", $where) : "";
-$query = "SELECT * FROM news $whereSQL ORDER BY $sort $order";
 
+// Count total results
+$countStmt = $db->prepare("SELECT COUNT(*) FROM news $whereSQL");
+$countStmt->execute($params);
+$totalResults = (int)$countStmt->fetchColumn();
+$totalPages = max(1, (int)ceil($totalResults / $perPage));
+if ($page > $totalPages) $page = $totalPages;
+$offset = ($page - 1) * $perPage;
+
+// Paginated query
+$query = "SELECT * FROM news $whereSQL ORDER BY $sort $order LIMIT $perPage OFFSET $offset";
 $stmt = $db->prepare($query);
 $stmt->execute($params);
 $news = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -47,6 +58,7 @@ function sortUrl($col, $currentSort, $currentOrder) {
     $params = $_GET;
     $params['sort'] = $col;
     $params['order'] = $newOrder;
+    $params['page'] = 1; // reset to first page on sort change
     return '?' . http_build_query($params);
 }
 
@@ -62,10 +74,25 @@ function sortIcon($col, $currentSort, $currentOrder) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RSS Reader – Tu lector personalizable de feeds RSS. Agrega tus fuentes favoritas y mantente informado en un solo lugar.">
+    <meta property="og:title" content="RSS Reader – Noticias">
+    <meta property="og:description" content="Agrega feeds RSS y mantente informado en un solo lugar.">
+    <meta property="og:type" content="website">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#1a56db">
     <title>RSS Reader – Noticias</title>
+    <!-- DNS prefetch (fallback) + Preconnect al CDN -->
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- Bootstrap CSS: síncrono (base del layout, evita CLS) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <!-- Bootstrap Icons: async — decorativo, no bloquea el render -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+          media="print" onload="this.media='all';this.onload=null">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"></noscript>
+    <!-- Estilos propios: inline (elimina 1 request HTTP) -->
+    <style><?php readfile(__DIR__ . '/assets/css/style.css'); ?></style>
 </head>
 <body>
 
@@ -113,8 +140,8 @@ function sortIcon($col, $currentSort, $currentOrder) {
 
 <div class="container py-4">
 
-    <!-- Alert for update status -->
-    <div id="updateAlert" class="d-none"></div>
+    <!-- Alert for update status (sin d-none: el div vacío no ocupa espacio, evita CLS) -->
+    <div id="updateAlert"></div>
 
     <!-- Search & Filter Bar -->
     <div class="card shadow-sm border-0 mb-4">
@@ -168,13 +195,16 @@ function sortIcon($col, $currentSort, $currentOrder) {
     <!-- Results info -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div class="text-muted small">
+            <?php
+                $from = $totalResults > 0 ? $offset + 1 : 0;
+                $to   = min($offset + $perPage, $totalResults);
+            ?>
             <?php if ($search || $feedFilter): ?>
-                <span class="fw-semibold"><?= count($news) ?></span> resultado(s) encontrado(s)
-                <?php if ($search): ?>
-                    para "<strong><?= htmlspecialchars($search) ?></strong>"
-                <?php endif; ?>
+                <span class="fw-semibold"><?= $totalResults ?></span> resultado(s)
+                <?php if ($search): ?> para "<strong><?= htmlspecialchars($search) ?></strong>"<?php endif; ?>
+                &mdash; mostrando <span class="fw-semibold"><?= $from ?>–<?= $to ?></span>
             <?php else: ?>
-                Mostrando <span class="fw-semibold"><?= count($news) ?></span> noticias
+                Mostrando <span class="fw-semibold"><?= $from ?>–<?= $to ?></span> de <span class="fw-semibold"><?= $totalResults ?></span> noticias
             <?php endif; ?>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -241,7 +271,7 @@ function sortIcon($col, $currentSort, $currentOrder) {
 
                     <!-- Title -->
                     <h5 class="card-title news-title">
-                        <a href="<?= htmlspecialchars($item['url']) ?>" target="_blank" class="text-decoration-none">
+                        <a href="<?= htmlspecialchars($item['url']) ?>" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
                             <?= htmlspecialchars($item['title'] ?: 'Sin título') ?>
                         </a>
                     </h5>
@@ -266,7 +296,7 @@ function sortIcon($col, $currentSort, $currentOrder) {
 
                     <!-- URL / Read more -->
                     <div class="mt-auto pt-2 border-top">
-                        <a href="<?= htmlspecialchars($item['url']) ?>" target="_blank" class="btn btn-sm btn-read-more">
+                        <a href="<?= htmlspecialchars($item['url']) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-read-more">
                             <i class="bi bi-box-arrow-up-right me-1"></i>Leer artículo completo
                         </a>
                     </div>
@@ -275,6 +305,43 @@ function sortIcon($col, $currentSort, $currentOrder) {
         </div>
         <?php endforeach; ?>
     </div>
+    <?php endif; ?>
+
+    <!-- Pagination -->
+    <?php if ($totalPages > 1): ?>
+    <?php
+        function pageUrl($p) {
+            $params = $_GET;
+            $params['page'] = $p;
+            return '?' . http_build_query($params);
+        }
+        $window = 2;
+    ?>
+    <nav class="mt-5" aria-label="Paginación de noticias">
+        <ul class="pagination justify-content-center flex-wrap gap-1">
+            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="<?= pageUrl($page - 1) ?>">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            <?php for ($p = 1; $p <= $totalPages; $p++):
+                $show = ($p === 1 || $p === $totalPages || abs($p - $page) <= $window);
+                $isEdge = ($p === 2 && $page > $window + 2) || ($p === $totalPages - 1 && $page < $totalPages - $window - 1);
+                if (!$show && $isEdge): ?>
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                <?php elseif ($show): ?>
+                <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                    <a class="page-link" href="<?= pageUrl($p) ?>"><?= $p ?></a>
+                </li>
+                <?php endif; ?>
+            <?php endfor; ?>
+            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                <a class="page-link" href="<?= pageUrl($page + 1) ?>">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
     <?php endif; ?>
 
 </div>
@@ -287,32 +354,34 @@ function sortIcon($col, $currentSort, $currentOrder) {
     </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" defer></script>
 <script>
 function updateFeeds() {
     const btn = document.getElementById('updateBtn');
-    const alert = document.getElementById('updateAlert');
+    const alertEl = document.getElementById('updateAlert');
 
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Actualizando...';
     }
 
-    alert.className = 'alert alert-info d-flex align-items-center mb-4';
-    alert.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Obteniendo noticias de los feeds, por favor espera...';
+    // Mostrar estado de carga (el div pasa de vacío a tener contenido — no hay CLS porque
+    // el espacio ya fue 0 antes, el contenido empuja hacia abajo solo en este momento)
+    alertEl.className = 'alert alert-info d-flex align-items-center mb-4';
+    alertEl.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>&nbsp;Obteniendo noticias de los feeds, por favor espera...';
 
     fetch('fetch.php')
         .then(r => r.json())
         .then(data => {
-            alert.className = 'alert alert-' + (data.success ? 'success' : 'warning') + ' mb-4';
-            alert.innerHTML = '<i class="bi bi-' + (data.success ? 'check-circle-fill' : 'exclamation-triangle-fill') + ' me-2"></i>' + data.message;
+            alertEl.className = 'alert alert-' + (data.success ? 'success' : 'warning') + ' mb-4';
+            alertEl.innerHTML = '<i class="bi bi-' + (data.success ? 'check-circle-fill' : 'exclamation-triangle-fill') + ' me-2"></i>' + data.message;
             if (data.new_count > 0) {
                 setTimeout(() => location.reload(), 1500);
             }
         })
-        .catch(err => {
-            alert.className = 'alert alert-danger mb-4';
-            alert.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Error al conectar con el servidor.';
+        .catch(() => {
+            alertEl.className = 'alert alert-danger mb-4';
+            alertEl.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Error al conectar con el servidor.';
         })
         .finally(() => {
             if (btn) {

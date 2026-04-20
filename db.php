@@ -13,6 +13,7 @@ function getDB() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT NOT NULL UNIQUE,
             name TEXT,
+            last_fetched DATETIME DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -29,7 +30,19 @@ function getDB() {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (feed_id) REFERENCES feeds(id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_news_feed_id  ON news(feed_id);
+        CREATE INDEX IF NOT EXISTS idx_news_pub_date ON news(pub_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_news_title    ON news(title);
+        CREATE INDEX IF NOT EXISTS idx_news_guid     ON news(guid);
     ");
+
+    // Agregar columna last_fetched si no existe (para bases de datos ya creadas)
+    try {
+        $db->exec("ALTER TABLE feeds ADD COLUMN last_fetched DATETIME DEFAULT NULL;");
+    } catch (Exception $e) {
+        // La columna ya existe, ignorar
+    }
 
     return $db;
 }

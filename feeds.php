@@ -50,10 +50,25 @@ $suggested = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestiona tus feeds RSS en RSS Reader. Agrega, organiza y elimina tus fuentes de noticias favoritas.">
+    <meta property="og:title" content="Gestión de Feeds – RSS Reader">
+    <meta property="og:description" content="Agrega y administra tus fuentes de noticias RSS.">
+    <meta property="og:type" content="website">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#1a56db">
     <title>Gestión de Feeds – RSS Reader</title>
+    <!-- DNS prefetch (fallback) + Preconnect al CDN -->
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- Bootstrap CSS: síncrono (base del layout, evita CLS) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <!-- Bootstrap Icons: async — decorativo, no bloquea el render -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+          media="print" onload="this.media='all';this.onload=null">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"></noscript>
+    <!-- Estilos propios: inline (elimina 1 request HTTP) -->
+    <style><?php readfile(__DIR__ . '/assets/css/style.css'); ?></style>
 </head>
 <body>
 
@@ -159,13 +174,17 @@ $suggested = [
                                     </div>
                                     <div class="text-muted small mt-1 text-truncate" style="max-width:350px">
                                         <i class="bi bi-link-45deg"></i>
-                                        <a href="<?= htmlspecialchars($feed['url']) ?>" target="_blank" class="text-muted">
+                                        <a href="<?= htmlspecialchars($feed['url']) ?>" target="_blank" rel="noopener noreferrer" class="text-muted">
                                             <?= htmlspecialchars($feed['url']) ?>
                                         </a>
                                     </div>
                                     <div class="text-muted small">
                                         <i class="bi bi-calendar3 me-1"></i>
                                         Agregado: <?= date('d/m/Y H:i', strtotime($feed['created_at'])) ?>
+                                        <?php if ($feed['last_fetched']): ?>
+                                        &nbsp;·&nbsp;<i class="bi bi-arrow-clockwise me-1"></i>
+                                        Actualizado: <?= date('d/m/Y H:i', strtotime($feed['last_fetched'])) ?>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <form method="POST" onsubmit="return confirm('¿Eliminar este feed y todas sus noticias?')">
@@ -186,7 +205,7 @@ $suggested = [
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" defer></script>
 <script>
 document.querySelectorAll('.suggested-btn').forEach(btn => {
     btn.addEventListener('click', () => {
